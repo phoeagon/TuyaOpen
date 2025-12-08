@@ -95,6 +95,7 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
     PR_DEBUG("Tuya Event ID:%d(%s)", event->id, EVENT_ID2STR(event->id));
     PR_INFO("Device Free heap %d", tal_system_get_free_heap_size());
     switch (event->id) {
+
     case TUYA_EVENT_BIND_START:
         PR_INFO("Device Bind Start!");
         break;
@@ -190,7 +191,16 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
 
     } break;
 
-        /* TBD.. add other event if necessary */
+    case TUYA_EVENT_BIND_TOKEN_ON:
+    case TUYA_EVENT_ACTIVATE_SUCCESSED:
+    case TUYA_EVENT_MQTT_DISCONNECT:
+    case TUYA_EVENT_DP_RECEIVE:
+    case TUYA_EVENT_DP_RECEIVE_CJSON:
+    case TUYA_EVENT_RESET_COMPLETE:
+    case TUYA_EVENT_DPCACHE_NOTIFY:
+    case TUYA_EVENT_BINDED_NOTIFY:
+    case TUYA_EVENT_RTC_REQ:
+        break;
 
     default:
         break;
