@@ -43,6 +43,11 @@
 #define PROJECT_VERSION "1.0.0"
 #endif
 
+#ifdef ESP_PLATFORM
+#include "nvs.h"
+#include "nvs_flash.h"
+#endif
+
 /* for cli command register */
 extern void tuya_app_cli_init(void);
 
@@ -228,6 +233,15 @@ void user_main(void)
     //! open iot development kit runtim init
     cJSON_InitHooks(&(cJSON_Hooks){.malloc_fn = tal_malloc, .free_fn = tal_free});
     tal_log_init(TAL_LOG_LEVEL_DEBUG, 1024, (TAL_LOG_OUTPUT_CB)tkl_log_output);
+
+#ifdef ESP_PLATFORM
+    esp_err_t ret = nvs_flash_init();
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        ret = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(ret);
+#endif
 
     PR_NOTICE("Application information:");
     PR_NOTICE("Project name:        %s", PROJECT_NAME);
