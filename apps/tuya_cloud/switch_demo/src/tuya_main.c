@@ -14,6 +14,7 @@
 #include "netmgr.h"
 #include "tal_api.h"
 #include "tkl_output.h"
+#include "tkl_gpio.h"
 #include "tuya_config.h"
 #include "tuya_iot.h"
 #include "tuya_iot_dp.h"
@@ -56,6 +57,48 @@ tuya_iot_client_t client;
 
 /* Tuya license information (uuid authkey) */
 tuya_iot_license_t license;
+
+/* LED Configuration */
+#define LED_PIN 8
+
+typedef enum {
+    LED_STATE_OFF,
+    LED_STATE_INIT,
+    LED_STATE_CONNECTING,
+    LED_STATE_CONNECTED
+} user_led_state_t;
+
+static TIMER_ID blink_timer;
+
+static void led_blink_cb(TIMER_ID timer_id, void *arg)
+{
+    static bool led_level = false;
+    led_level = !led_level;
+    tkl_gpio_write(LED_PIN, led_level ? TUYA_GPIO_LEVEL_HIGH : TUYA_GPIO_LEVEL_LOW);
+}
+
+static void set_led_state(user_led_state_t state)
+{
+    tal_sw_timer_stop(blink_timer);
+    
+    switch (state) {
+        case LED_STATE_OFF:
+            tkl_gpio_write(LED_PIN, TUYA_GPIO_LEVEL_HIGH);
+            break;
+        case LED_STATE_INIT:
+            // Fast blink: 100ms
+            tal_sw_timer_start(blink_timer, 100, TAL_TIMER_CYCLE);
+            break;
+        case LED_STATE_CONNECTING:
+            // Medium blink: 500ms
+            tal_sw_timer_start(blink_timer, 500, TAL_TIMER_CYCLE);
+            break;
+        case LED_STATE_CONNECTED:
+            // Solid ON (Active Low)
+            tkl_gpio_write(LED_PIN, TUYA_GPIO_LEVEL_LOW);
+            break;
+    }
+}
 
 /**
  * @brief user defined log output api, in this demo, it will use uart0 as log-tx
@@ -103,6 +146,7 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
 
     case TUYA_EVENT_BIND_START:
         PR_INFO("Device Bind Start!");
+        set_led_state(LED_STATE_CONNECTING);
         break;
 
     /* Print the QRCode for Tuya APP bind */
@@ -117,6 +161,7 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
     /* MQTT with tuya cloud is connected, device online */
     case TUYA_EVENT_MQTT_CONNECTED:
         PR_INFO("Device MQTT Connected!");
+        set_led_state(LED_STATE_CONNECTED);
         break;
 
     /* RECV upgrade request */
@@ -131,10 +176,13 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
         break;
     case TUYA_EVENT_RESET:
         PR_INFO("Device Reset:%d", event->value.asInteger);
+        set_led_state(LED_STATE_INIT);
         break;
 
     /* RECV OBJ DP */
     case TUYA_EVENT_DP_RECEIVE_OBJ: {
+        // TURN OFF TO INDICATE WE RECEIVED IT... ASSUMING THE FOLLOWING LOGIC RUNS FAST.
+        set_led_state(LED_STATE_OFF);
         dp_obj_recv_t *dpobj = event->value.dpobj;
         PR_DEBUG("SOC Rev DP Cmd t1:%d t2:%d CNT:%u", dpobj->cmd_tp, dpobj->dtt_tp, dpobj->dpscnt);
         if (dpobj->devid != NULL) {
@@ -174,11 +222,15 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
         }
 
         tuya_iot_dp_obj_report(client, dpobj->devid, dpobj->dps, dpobj->dpscnt, 0);
+        // TURN BACK ON
+        set_led_state(LED_STATE_CONNECTED);
 
     } break;
 
     /* RECV RAW DP */
     case TUYA_EVENT_DP_RECEIVE_RAW: {
+        // TURN OFF TO INDICATE WE RECEIVED IT... ASSUMING THE FOLLOWING LOGIC RUNS FAST.
+        set_led_state(LED_STATE_OFF);
         dp_raw_recv_t *dpraw = event->value.dpraw;
         PR_DEBUG("SOC Rev DP Cmd t1:%d t2:%d", dpraw->cmd_tp, dpraw->dtt_tp);
         if (dpraw->devid != NULL) {
@@ -193,18 +245,24 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
         }
 
         tuya_iot_dp_raw_report(client, dpraw->devid, &dpraw->dp, 3);
+        // TURN BACK ON
+        set_led_state(LED_STATE_CONNECTED);
 
     } break;
 
     case TUYA_EVENT_BIND_TOKEN_ON:
     case TUYA_EVENT_ACTIVATE_SUCCESSED:
-    case TUYA_EVENT_MQTT_DISCONNECT:
+    // case TUYA_EVENT_MQTT_DISCONNECT:
     case TUYA_EVENT_DP_RECEIVE:
     case TUYA_EVENT_DP_RECEIVE_CJSON:
     case TUYA_EVENT_RESET_COMPLETE:
     case TUYA_EVENT_DPCACHE_NOTIFY:
     case TUYA_EVENT_BINDED_NOTIFY:
     case TUYA_EVENT_RTC_REQ:
+        break;
+
+    case TUYA_EVENT_MQTT_DISCONNECT:
+        set_led_state(LED_STATE_CONNECTING);
         break;
 
     default:
@@ -259,6 +317,17 @@ void user_main(void)
     });
     tal_sw_timer_init();
     tal_workq_init();
+
+    // LED Init
+    TUYA_GPIO_BASE_CFG_T led_cfg = {
+        .mode = TUYA_GPIO_PUSH_PULL,
+        .direct = TUYA_GPIO_OUTPUT,
+        .level = TUYA_GPIO_LEVEL_HIGH
+    };
+    tkl_gpio_init(LED_PIN, &led_cfg);
+    
+    tal_sw_timer_create(led_blink_cb, NULL, &blink_timer);
+    set_led_state(LED_STATE_INIT);
 
 #if !defined(PLATFORM_UBUNTU) || (PLATFORM_UBUNTU == 0)
     tal_cli_init();
