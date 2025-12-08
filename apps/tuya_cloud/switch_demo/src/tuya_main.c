@@ -154,6 +154,7 @@ void user_event_handler_on(tuya_iot_client_t *client, tuya_event_msg_t *event)
 #if defined(ENABLE_QRCODE) && (ENABLE_QRCODE == 1)
         char buffer[255];
         sprintf(buffer, "https://smartapp.tuya.com/s/p?p=%s&uuid=%s&v=2.0", TUYA_PRODUCT_ID, license.uuid);
+        PR_DEBUG("QRCode: %s", buffer);
         qrcode_string_output(buffer, user_log_output_cb, 0);
 #endif
     } break;
@@ -343,7 +344,7 @@ void user_main(void)
         PR_WARN("Replace the TUYA_OPENSDK_UUID and TUYA_OPENSDK_AUTHKEY contents, otherwise the demo cannot work.\n \
                 Visit https://platform.tuya.com/purchase/index?type=6 to get the open-sdk uuid and authkey.");
     }
-    // PR_DEBUG("uuid %s, authkey %s", license.uuid, license.authkey);
+    PR_DEBUG("uuid %s, authkey %s", license.uuid, license.authkey);
     /* Initialize Tuya device configuration */
     rt = tuya_iot_init(&client, &(const tuya_iot_config_t){
                                     .software_ver = PROJECT_VERSION,
