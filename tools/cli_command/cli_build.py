@@ -276,13 +276,18 @@ def check_bin_file(using_data,):
     return True
 
 
-def build_project(verbose=False):
+def build_project(verbose=False, idf_flags=""):
     logger = get_logger()
     check_proj_dir()
 
     if not env_check():
         logger.error("Env check error.")
         return False
+
+    # Set IDF_EXTRA_FLAGS environment variable for platform scripts
+    if idf_flags:
+        os.environ["IDF_EXTRA_FLAGS"] = idf_flags
+        logger.info(f"Using additional IDF flags: {idf_flags}")
 
     init_using_config(force=False)
     params = get_global_params()
@@ -334,7 +339,10 @@ def build_project(verbose=False):
 @click.option('-v', '--verbose',
               is_flag=True, default=False,
               help="Show verbose message.")
-def cli(verbose):
-    if not build_project(verbose):
+@click.option('--idf-flags',
+              default="",
+              help="Additional flags to pass to idf.py (e.g., '-v' or '-D CONFIG_EXAMPLE=1').")
+def cli(verbose, idf_flags):
+    if not build_project(verbose, idf_flags):
         sys.exit(1)
     sys.exit(0)
