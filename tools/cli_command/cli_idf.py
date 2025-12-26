@@ -4,6 +4,7 @@
 import os
 import sys
 import click
+import shlex
 
 from tools.cli_command.util import (
     get_logger, get_global_params, check_proj_dir,
@@ -49,8 +50,19 @@ def run_idf_command(idf_command, idf_flags=""):
         logger.error("Failed to import ESP32 utilities. Please ensure the platform is properly set up.")
         return False
     
-    # Build the idf.py command
-    cmd_parts = ["idf.py"] + list(idf_command)
+    # Build the complete idf.py command
+    cmd_parts = ["idf.py"]
+    
+    # Add flags if provided
+    if idf_flags:
+        # Properly split flags while preserving quoted arguments
+        flags_list = shlex.split(idf_flags)
+        cmd_parts.extend(flags_list)
+    
+    # Add the command arguments
+    cmd_parts.extend(list(idf_command))
+    
+    # Create the full command string
     cmd = " ".join(cmd_parts)
     
     # Determine the working directory
@@ -61,11 +73,9 @@ def run_idf_command(idf_command, idf_flags=""):
         return False
     
     logger.info(f"Running: {cmd}")
-    if idf_flags:
-        logger.info(f"With flags: {idf_flags}")
     
-    # Execute the command
-    if not execute_idf_commands(platform_root, cmd, directory, idf_flags):
+    # Execute the command - Now with correct number of arguments
+    if not execute_idf_commands(platform_root, cmd, directory):
         logger.error("Command failed.")
         return False
     
@@ -89,6 +99,7 @@ def cli(idf_command, idf_flags):
         tos.py idf clean
         tos.py idf --idf-flags="-v" menuconfig
         tos.py idf --idf-flags="-D IDF_TARGET=esp32s3" set-target esp32s3
+        tos.py idf --idf-flags="-p /dev/ttyUSB0" flash
     """
     check_proj_dir()
     
